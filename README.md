@@ -6,7 +6,7 @@ Views:
 - Board: rotating overview with the next match and free-to-air highlights.
 - Free 28: Mediacorp / Channel 5 / mewatch free-to-air schedule.
 - Scoreboard: live Singapore-time clock, countdown, current/next match status, and upcoming fixtures.
-- Quiz: 10 World Cup trivia questions with instant scoring.
+- Quiz: participant name entry, saved per-person answers, leaderboard, and 10 World Cup trivia questions.
 - All 104: full Singapore-time poster.
 
 Notes:

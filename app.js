@@ -1098,7 +1098,8 @@ let liveTimer;
 let dataTimer;
 let fullSchedule = [];
 let freeMatches = [];
-let quizAnswers = {};
+let quizParticipants = [];
+let currentParticipantId = null;
 
 const quizQuestions = [
   {
@@ -1108,22 +1109,22 @@ const quizQuestions = [
     note: "Klose scored 16 World Cup goals for Germany."
   },
   {
-    question: "Which country has won the men's World Cup the most times?",
-    options: ["Brazil", "Germany", "Italy", "Argentina"],
-    answer: "Brazil",
-    note: "Brazil have five men's World Cup titles."
+    question: "Which player scored a hat-trick in the 2022 men's World Cup final?",
+    options: ["Kylian Mbappe", "Lionel Messi", "Julian Alvarez", "Olivier Giroud"],
+    answer: "Kylian Mbappe",
+    note: "Mbappe scored all three France goals in the final."
   },
   {
-    question: "Who won the 2022 men's World Cup?",
-    options: ["Argentina", "France", "Croatia", "Morocco"],
-    answer: "Argentina",
-    note: "Argentina beat France in the 2022 final."
+    question: "Which Argentina player lifted the 2022 men's World Cup as captain?",
+    options: ["Lionel Messi", "Angel Di Maria", "Emiliano Martinez", "Lautaro Martinez"],
+    answer: "Lionel Messi",
+    note: "Messi captained Argentina to the 2022 title."
   },
   {
-    question: "Which country hosted the first men's World Cup in 1930?",
-    options: ["Uruguay", "Brazil", "Italy", "France"],
-    answer: "Uruguay",
-    note: "Uruguay hosted and won the first tournament."
+    question: "Which player is Brazil's all-time leading men's World Cup goalscorer?",
+    options: ["Ronaldo Nazario", "Pele", "Neymar", "Romario"],
+    answer: "Ronaldo Nazario",
+    note: "Ronaldo scored 15 World Cup goals for Brazil."
   },
   {
     question: "Who won the Golden Ball at the 2022 men's World Cup?",
@@ -1132,34 +1133,34 @@ const quizQuestions = [
     note: "Messi was named the tournament's best player."
   },
   {
-    question: "Which country won the men's World Cup in 2018?",
-    options: ["France", "Croatia", "Belgium", "Germany"],
-    answer: "France",
-    note: "France defeated Croatia in the 2018 final."
-  },
-  {
-    question: "What is the current men's World Cup trophy called?",
-    options: ["FIFA World Cup Trophy", "Jules Rimet Trophy", "Golden Globe", "Champions Cup"],
-    answer: "FIFA World Cup Trophy",
-    note: "The Jules Rimet Trophy was used before the current trophy."
-  },
-  {
-    question: "Which country has played in every men's World Cup through 2022?",
-    options: ["Brazil", "Germany", "Argentina", "England"],
-    answer: "Brazil",
-    note: "Brazil are the only nation to appear in every men's World Cup through 2022."
-  },
-  {
-    question: "Who scored a hat-trick in the 2022 men's World Cup final?",
-    options: ["Kylian Mbappe", "Lionel Messi", "Julian Alvarez", "Olivier Giroud"],
+    question: "Which France player won the Golden Boot at the 2022 men's World Cup?",
+    options: ["Kylian Mbappe", "Antoine Griezmann", "Olivier Giroud", "Aurelien Tchouameni"],
     answer: "Kylian Mbappe",
-    note: "Mbappe scored three goals for France in the final."
+    note: "Mbappe finished as top scorer with eight goals."
   },
   {
-    question: "Which country won the men's World Cup in 2010?",
-    options: ["Spain", "Netherlands", "Germany", "Italy"],
-    answer: "Spain",
-    note: "Spain beat the Netherlands 1-0 after extra time."
+    question: "Which goalkeeper won the Golden Glove at the 2022 men's World Cup?",
+    options: ["Emiliano Martinez", "Hugo Lloris", "Yassine Bounou", "Dominik Livakovic"],
+    answer: "Emiliano Martinez",
+    note: "Martinez won the award after Argentina's title run."
+  },
+  {
+    question: "Which player won the Golden Ball at the 2018 men's World Cup?",
+    options: ["Luka Modric", "Kylian Mbappe", "Antoine Griezmann", "Harry Kane"],
+    answer: "Luka Modric",
+    note: "Modric led Croatia to the 2018 final."
+  },
+  {
+    question: "Which England player won the Golden Boot at the 2018 men's World Cup?",
+    options: ["Harry Kane", "Raheem Sterling", "Marcus Rashford", "Bukayo Saka"],
+    answer: "Harry Kane",
+    note: "Kane scored six goals in Russia 2018."
+  },
+  {
+    question: "Which Spain player scored the winning goal in the 2010 men's World Cup final?",
+    options: ["Andres Iniesta", "Xavi", "David Villa", "Fernando Torres"],
+    answer: "Andres Iniesta",
+    note: "Iniesta scored in extra time against the Netherlands."
   }
 ];
 
@@ -1202,6 +1203,14 @@ function normalizeFixture(value) {
     .replace(/\bv\b/g, "vs")
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function isFreeMatch(match) {
@@ -1293,6 +1302,9 @@ function renderLiveScoreboard() {
     : next
       ? `Kickoff in ${formatDuration(next.startsAt - now)}`
       : "Final whistle";
+  const teams = focus.fixture.split(/\s+v(?:s)?\s+/i);
+  const homeTeam = teams[0] ?? focus.fixture;
+  const awayTeam = teams[1] ?? "";
 
   container.innerHTML = `
     <div class="scoreboard-status">
@@ -1300,9 +1312,9 @@ function renderLiveScoreboard() {
       <strong>${clockFormat.format(now)} SGT</strong>
     </div>
     <div class="scoreline">
-      <span>${focus.fixture.split(" v ")[0] ?? focus.fixture}</span>
+      <span>${homeTeam}</span>
       <b>${live ? "LIVE" : "--"}</b>
-      <span>${focus.fixture.split(" v ")[1] ?? ""}</span>
+      <span>${awayTeam}</span>
     </div>
     <div class="countdown">${countdown}</div>
     <p>${dateFormat.format(focus.startsAt)} at ${focus.singaporeTime} SGT | ${focus.stage} | ${focus.city}</p>
@@ -1367,10 +1379,12 @@ function renderFreeTable() {
 function renderQuiz() {
   const grid = document.getElementById("quizGrid");
   if (!grid) return;
+  const currentParticipant = getCurrentParticipant();
+  const answers = currentParticipant.answers;
 
   grid.innerHTML = quizQuestions
     .map((item, index) => {
-      const selected = quizAnswers[index];
+      const selected = answers[index];
       return `
         <article class="quiz-card">
           <span class="quiz-number">Question ${index + 1}</span>
@@ -1395,39 +1409,129 @@ function renderQuiz() {
   document.querySelectorAll(".quiz-option").forEach((button) => {
     button.addEventListener("click", () => {
       const questionIndex = Number(button.dataset.question);
-      if (quizAnswers[questionIndex]) return;
-      quizAnswers[questionIndex] = button.dataset.answer;
-      saveQuizAnswers();
+      const participant = getCurrentParticipant();
+      if (participant.answers[questionIndex]) return;
+      participant.answers[questionIndex] = button.dataset.answer;
+      saveQuizState();
       renderQuiz();
       renderQuizScore();
+      renderParticipantControls();
     });
   });
   renderQuizScore();
+  renderParticipantControls();
 }
 
 function renderQuizScore() {
-  const answered = Object.keys(quizAnswers).length;
-  const correct = Object.entries(quizAnswers).filter(([index, answer]) => quizQuestions[Number(index)].answer === answer).length;
+  const participant = getCurrentParticipant();
+  const answered = Object.keys(participant.answers).length;
+  const correct = getParticipantScore(participant);
   const score = document.getElementById("quizScore");
   const progress = document.getElementById("quizProgress");
   if (score) score.textContent = `${correct} / ${quizQuestions.length}`;
-  if (progress) progress.textContent = `${answered} answered`;
+  if (progress) progress.textContent = `${participant.name} | ${answered} answered`;
 }
 
-function saveQuizAnswers() {
+function createParticipant(name) {
+  return {
+    id: `participant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name,
+    answers: {},
+  };
+}
+
+function ensureParticipant() {
+  quizParticipants = quizParticipants
+    .filter((participant) => participant?.name)
+    .map((participant) => ({
+      ...participant,
+      answers: participant.answers ?? {},
+    }));
+  if (!quizParticipants.length) {
+    const guest = createParticipant("Guest");
+    quizParticipants = [guest];
+    currentParticipantId = guest.id;
+  }
+  if (!quizParticipants.some((participant) => participant.id === currentParticipantId)) {
+    currentParticipantId = quizParticipants[0].id;
+  }
+}
+
+function getCurrentParticipant() {
+  ensureParticipant();
+  return quizParticipants.find((participant) => participant.id === currentParticipantId) ?? quizParticipants[0];
+}
+
+function getParticipantScore(participant) {
+  return Object.entries(participant.answers).filter(([index, answer]) => quizQuestions[Number(index)].answer === answer).length;
+}
+
+function renderParticipantControls() {
+  const select = document.getElementById("participantSelect");
+  const leaderboard = document.getElementById("quizLeaderboard");
+  if (!select || !leaderboard) return;
+  ensureParticipant();
+
+  select.innerHTML = quizParticipants
+    .map((participant) => `<option value="${participant.id}" ${participant.id === currentParticipantId ? "selected" : ""}>${escapeHtml(participant.name)}</option>`)
+    .join("");
+
+  const ranked = [...quizParticipants].sort((a, b) => getParticipantScore(b) - getParticipantScore(a));
+  leaderboard.innerHTML = `
+    <strong>Leaderboard</strong>
+    ${ranked.map((participant, index) => `
+      <div class="leaderboard-row ${participant.id === currentParticipantId ? "active" : ""}">
+        <span>${index + 1}. ${escapeHtml(participant.name)}</span>
+        <b>${getParticipantScore(participant)} / ${quizQuestions.length}</b>
+      </div>`).join("")}`;
+}
+
+function addOrSwitchParticipant() {
+  const input = document.getElementById("participantName");
+  const name = input.value.trim();
+  if (!name) return;
+
+  const existing = quizParticipants.find((participant) => participant.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    currentParticipantId = existing.id;
+  } else {
+    const participant = createParticipant(name);
+    quizParticipants.push(participant);
+    currentParticipantId = participant.id;
+  }
+  input.value = "";
+  saveQuizState();
+  renderQuiz();
+}
+
+function saveQuizState() {
   try {
-    localStorage.setItem("worldCupQuizAnswers", JSON.stringify(quizAnswers));
+    localStorage.setItem("worldCupQuizState", JSON.stringify({ quizParticipants, currentParticipantId }));
   } catch {
     // The quiz still works for the current page view if storage is unavailable.
   }
 }
 
-function loadQuizAnswers() {
+function loadQuizState() {
   try {
-    quizAnswers = JSON.parse(localStorage.getItem("worldCupQuizAnswers") ?? "{}") ?? {};
+    const saved = JSON.parse(localStorage.getItem("worldCupQuizState") ?? "null");
+    if (saved?.quizParticipants?.length) {
+      quizParticipants = saved.quizParticipants;
+      currentParticipantId = saved.currentParticipantId;
+    } else {
+      const oldAnswers = JSON.parse(localStorage.getItem("worldCupQuizAnswers") ?? "null");
+      if (oldAnswers && Object.keys(oldAnswers).length) {
+        const guest = createParticipant("Guest");
+        guest.answers = oldAnswers;
+        quizParticipants = [guest];
+        currentParticipantId = guest.id;
+      }
+    }
   } catch {
-    quizAnswers = {};
+    quizParticipants = [];
+    currentParticipantId = null;
   }
+  ensureParticipant();
 }
 
 function hydrateData(scheduleData, freeData) {
@@ -1476,7 +1580,7 @@ async function init() {
   renderUpcomingMini();
   renderScoreboardList();
   renderFreeTable();
-  loadQuizAnswers();
+  loadQuizState();
   renderQuiz();
 
   liveTimer = setInterval(() => {
@@ -1515,8 +1619,23 @@ async function init() {
   });
 
   document.getElementById("resetQuiz").addEventListener("click", () => {
-    quizAnswers = {};
-    saveQuizAnswers();
+    getCurrentParticipant().answers = {};
+    saveQuizState();
+    renderQuiz();
+  });
+
+  document.getElementById("addParticipant").addEventListener("click", addOrSwitchParticipant);
+
+  document.getElementById("participantName").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addOrSwitchParticipant();
+    }
+  });
+
+  document.getElementById("participantSelect").addEventListener("change", (event) => {
+    currentParticipantId = event.target.value;
+    saveQuizState();
     renderQuiz();
   });
 

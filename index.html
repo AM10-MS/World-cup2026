@@ -119,7 +119,17 @@
             <span id="quizScore">0 / 10</span>
             <small id="quizProgress">0 answered</small>
           </div>
-          <button id="resetQuiz" class="tool-button quiz-reset" type="button">Reset quiz</button>
+          <div class="participant-panel">
+            <label for="participantName">Participant name</label>
+            <div class="participant-form">
+              <input id="participantName" type="text" placeholder="e.g. Ahmad" autocomplete="off">
+              <button id="addParticipant" class="tool-button" type="button">Add / switch</button>
+            </div>
+            <label for="participantSelect">Current participant</label>
+            <select id="participantSelect"></select>
+            <div id="quizLeaderboard" class="quiz-leaderboard"></div>
+          </div>
+          <button id="resetQuiz" class="tool-button quiz-reset" type="button">Reset current participant</button>
         </div>
         <div id="quizGrid" class="quiz-grid"></div>
       </section>
