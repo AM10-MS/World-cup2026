@@ -1096,8 +1096,16 @@ let rotate = true;
 let timer;
 let liveTimer;
 let dataTimer;
+let scoreTimer;
 let fullSchedule = [];
 let freeMatches = [];
+let liveScoreFeed = {
+  ok: false,
+  configured: false,
+  matches: [],
+  message: "Live score feed has not loaded yet.",
+  updatedAt: null,
+};
 let quizParticipants = [];
 let currentParticipantId = null;
 
@@ -1205,6 +1213,27 @@ function normalizeFixture(value) {
     .trim();
 }
 
+function normalizeTeamName(value) {
+  return normalizeFixture(value)
+    .replace(/\bfc\b/g, "")
+    .replace(/\bafc\b/g, "")
+    .replace(/\bthe\b/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getFixtureTeams(fixture) {
+  const teams = fixture.split(/\s+v(?:s)?\s+/i);
+  return {
+    home: teams[0] ?? fixture,
+    away: teams[1] ?? "",
+  };
+}
+
+function fixtureKey(home, away) {
+  return `${normalizeTeamName(home)}::${normalizeTeamName(away)}`;
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1224,6 +1253,56 @@ function isFreeMatch(match) {
 
 function getUpcoming(items, now = new Date()) {
   return items.filter((item) => item.startsAt > now).sort(byStart);
+}
+
+function matchStatusLabel(status) {
+  const labels = {
+    SCHEDULED: "Scheduled",
+    TIMED: "Timed",
+    IN_PLAY: "Live",
+    LIVE: "Live",
+    PAUSED: "Half-time",
+    FINISHED: "Final",
+    POSTPONED: "Postponed",
+    SUSPENDED: "Suspended",
+    CANCELLED: "Cancelled",
+  };
+  return labels[status] ?? status ?? "Scheduled";
+}
+
+function isLiveApiStatus(status) {
+  return ["IN_PLAY", "LIVE", "PAUSED"].includes(status);
+}
+
+function scoreText(match) {
+  if (Number.isFinite(match?.homeScore) && Number.isFinite(match?.awayScore)) {
+    return `${match.homeScore} - ${match.awayScore}`;
+  }
+  return isLiveApiStatus(match?.status) ? "LIVE" : "--";
+}
+
+function getApiMatchForFixture(fixture) {
+  const teams = getFixtureTeams(fixture);
+  const key = fixtureKey(teams.home, teams.away);
+  const reverseKey = fixtureKey(teams.away, teams.home);
+  return liveScoreFeed.matches.find((match) => {
+    const apiKey = fixtureKey(match.homeTeam, match.awayTeam);
+    return apiKey === key || apiKey === reverseKey;
+  }) ?? null;
+}
+
+function getApiFocusMatch() {
+  return liveScoreFeed.matches.find((match) => isLiveApiStatus(match.status)) ?? null;
+}
+
+function getScheduleMatchForApi(apiMatch) {
+  const apiKey = fixtureKey(apiMatch.homeTeam, apiMatch.awayTeam);
+  const reverseKey = fixtureKey(apiMatch.awayTeam, apiMatch.homeTeam);
+  return fullSchedule.find((match) => {
+    const teams = getFixtureTeams(match.fixture);
+    const scheduleKey = fixtureKey(teams.home, teams.away);
+    return scheduleKey === apiKey || scheduleKey === reverseKey;
+  }) ?? null;
 }
 
 function formatDuration(ms) {
@@ -1289,22 +1368,34 @@ function renderLiveScoreboard() {
 
   const now = new Date();
   const { live, next, last } = getMatchState(now);
-  const focus = live ?? next ?? last;
+  const apiFocus = getApiFocusMatch();
+  const focus = apiFocus ? (getScheduleMatchForApi(apiFocus) ?? live ?? next ?? last) : (live ?? next ?? last);
   if (!focus) {
     container.innerHTML = "<small>Loading</small><strong>Schedule is loading...</strong>";
     return;
   }
 
+  const apiMatch = apiFocus ?? getApiMatchForFixture(focus.fixture);
   const free = isFreeMatch(focus);
-  const status = live ? "Live window" : next ? "Next kickoff" : "Tournament complete";
-  const countdown = live
+  const status = apiMatch
+    ? matchStatusLabel(apiMatch.status)
+    : live
+      ? "Live window"
+      : next
+        ? "Next kickoff"
+        : "Tournament complete";
+  const countdown = apiMatch
+    ? liveScoreFeed.ok
+      ? `Updated ${liveScoreFeed.updatedAt ? new Date(liveScoreFeed.updatedAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "now"}`
+      : liveScoreFeed.message
+    : live
     ? `Started ${formatDuration(now - live.startsAt)} ago`
     : next
       ? `Kickoff in ${formatDuration(next.startsAt - now)}`
       : "Final whistle";
-  const teams = focus.fixture.split(/\s+v(?:s)?\s+/i);
-  const homeTeam = teams[0] ?? focus.fixture;
-  const awayTeam = teams[1] ?? "";
+  const teams = getFixtureTeams(focus.fixture);
+  const homeTeam = apiMatch?.homeTeam ?? teams.home;
+  const awayTeam = apiMatch?.awayTeam ?? teams.away;
 
   container.innerHTML = `
     <div class="scoreboard-status">
@@ -1313,13 +1404,13 @@ function renderLiveScoreboard() {
     </div>
     <div class="scoreline">
       <span>${homeTeam}</span>
-      <b>${live ? "LIVE" : "--"}</b>
+      <b class="${apiMatch && isLiveApiStatus(apiMatch.status) ? "live-score" : ""}">${apiMatch ? scoreText(apiMatch) : live ? "LIVE" : "--"}</b>
       <span>${awayTeam}</span>
     </div>
     <div class="countdown">${countdown}</div>
     <p>${dateFormat.format(focus.startsAt)} at ${focus.singaporeTime} SGT | ${focus.stage} | ${focus.city}</p>
     ${free ? '<em>Free on Channel 5 + mewatch</em>' : ""}
-    <small class="score-note">Actual live scores need a match-data API. This board updates live clock, countdown, and fixture status from the schedule.</small>`;
+    <small class="score-note">${liveScoreFeed.configured ? "Scores powered by football-data.org when match data is available." : "Add FOOTBALL_DATA_API_KEY in Vercel to enable real live scores."}</small>`;
 }
 
 function renderFreeHighlights() {
@@ -1355,7 +1446,7 @@ function renderScoreboardList() {
       <article class="scoreboard-row">
         <span>${dateFormat.format(match.startsAt)} | ${match.singaporeTime} SGT</span>
         <strong>${match.fixture}</strong>
-        <small>${match.stage} | ${match.city}${isFreeMatch(match) ? " | Free-to-air" : ""}</small>
+        <small>${match.stage} | ${match.city}${isFreeMatch(match) ? " | Free-to-air" : ""}${getApiMatchForFixture(match.fixture) ? ` | ${matchStatusLabel(getApiMatchForFixture(match.fixture).status)} ${scoreText(getApiMatchForFixture(match.fixture))}` : ""}</small>
       </article>`)
     .join("");
 }
@@ -1569,9 +1660,44 @@ async function loadData() {
   };
 }
 
+async function loadLiveScores() {
+  if (window.location.protocol === "file:") {
+    liveScoreFeed = {
+      ok: false,
+      configured: false,
+      matches: [],
+      message: "Live scores are available after deploying to Vercel with an API key.",
+      updatedAt: null,
+    };
+    return;
+  }
+
+  try {
+    const response = await fetch("/api/live-scores", { cache: "no-store" });
+    const payload = await response.json();
+    liveScoreFeed = {
+      ok: Boolean(payload.ok),
+      configured: Boolean(payload.configured),
+      provider: payload.provider,
+      matches: payload.matches ?? [],
+      message: payload.message ?? "",
+      updatedAt: payload.updatedAt ?? new Date().toISOString(),
+    };
+  } catch {
+    liveScoreFeed = {
+      ok: false,
+      configured: false,
+      matches: [],
+      message: "Live score feed is unavailable on this host.",
+      updatedAt: null,
+    };
+  }
+}
+
 async function init() {
   const data = await loadData();
   hydrateData(data.schedule, data.freeMatches);
+  await loadLiveScores();
 
   renderClock();
   renderNextMatch();
@@ -1595,6 +1721,12 @@ async function init() {
     renderScoreboardList();
     renderFreeTable();
   }, 60_000);
+
+  scoreTimer = setInterval(async () => {
+    await loadLiveScores();
+    renderLiveScoreboard();
+    renderScoreboardList();
+  }, 45_000);
 
   document.querySelectorAll("[data-slide-link]").forEach((button) => {
     button.addEventListener("click", (event) => {

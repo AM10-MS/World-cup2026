@@ -536,6 +536,12 @@ h2 {
   font-size: clamp(24px, 2.6vw, 42px);
 }
 
+.scoreline b.live-score {
+  background: var(--pink);
+  color: #fff;
+  box-shadow: 0 0 0 6px rgba(255, 36, 92, 0.18);
+}
+
 .countdown {
   color: var(--gold);
   font-size: clamp(36px, 4.6vw, 80px);

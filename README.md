@@ -10,11 +10,12 @@ Views:
 - All 104: full Singapore-time poster.
 
 Notes:
-- This is a fully static site: HTML, CSS, JavaScript, images, and JSON only.
+- The main board is static HTML/CSS/JavaScript, with one optional Vercel Function for live scores.
 - It works from `file://`, localhost, GitHub, and Vercel.
 - The schedule data is embedded in `app.js` so the site still works even if Vercel cannot fetch the separate JSON files.
 - The scoreboard updates the clock, countdown, and match status in real time from the fixture schedule.
-- Actual live match scores require a separate sports data API; this static version does not invent live scores.
+- Real match scores are supported on Vercel through `api/live-scores.js` using football-data.org.
+- If the live-score API key is missing or the provider has no 2026 World Cup data yet, the board falls back to the schedule countdown.
 
 Run locally:
 
@@ -55,6 +56,22 @@ Vercel setup:
 5. Output Directory: leave blank.
 6. Install Command: leave blank.
 7. Deploy.
+
+Live score setup:
+1. Create an API token at `football-data.org`.
+2. In Vercel, open this project.
+3. Go to `Settings` -> `Environment Variables`.
+4. Add:
+
+```text
+FOOTBALL_DATA_API_KEY=your_token_here
+```
+
+5. Select `Production`.
+6. Save.
+7. Redeploy the latest deployment from the Vercel `Deployments` tab.
+
+The frontend polls `/api/live-scores` every 45 seconds. The serverless function keeps the token private and returns normalized match scores to the scoreboard.
 
 Troubleshooting:
 - If Vercel shows `Unexpected token 'T', "The page c"... is not valid JSON`, it means an older version tried to fetch a JSON file but Vercel returned a "The page could not be found" response. Push the latest `app.js` and `index.html`; the current version embeds the schedule and does not rely on that fetch path.
