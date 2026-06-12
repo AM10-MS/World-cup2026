@@ -1592,6 +1592,7 @@ function createParticipant(name) {
     id: `participant-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     name,
     answers: {},
+    joinedAt: new Date().toISOString(),
   };
 }
 
@@ -1601,7 +1602,11 @@ function ensureParticipant() {
     .map((participant) => ({
       ...participant,
       answers: participant.answers ?? {},
+      joinedAt: participant.joinedAt ?? new Date().toISOString(),
     }));
+  if (quizParticipants.some((participant) => participant.name !== "Guest")) {
+    quizParticipants = quizParticipants.filter((participant) => participant.name !== "Guest" || getParticipantAnswered(participant) > 0);
+  }
   if (!quizParticipants.length) {
     const guest = createParticipant("Guest");
     quizParticipants = [guest];
@@ -1621,6 +1626,14 @@ function getParticipantScore(participant) {
   return Object.entries(participant.answers).filter(([index, answer]) => quizQuestions[Number(index)].answer === answer).length;
 }
 
+function getParticipantAnswered(participant) {
+  return Object.keys(participant.answers ?? {}).length;
+}
+
+function getVisibleParticipants() {
+  return quizParticipants.filter((participant) => participant.name !== "Guest" || getParticipantAnswered(participant) > 0);
+}
+
 function renderParticipantControls() {
   const select = document.getElementById("participantSelect");
   const leaderboard = document.getElementById("quizLeaderboard");
@@ -1631,14 +1644,21 @@ function renderParticipantControls() {
     .map((participant) => `<option value="${participant.id}" ${participant.id === currentParticipantId ? "selected" : ""}>${escapeHtml(participant.name)}</option>`)
     .join("");
 
-  const ranked = [...quizParticipants].sort((a, b) => getParticipantScore(b) - getParticipantScore(a));
+  const visibleParticipants = getVisibleParticipants();
+  const ranked = [...visibleParticipants].sort((a, b) => {
+    const scoreDiff = getParticipantScore(b) - getParticipantScore(a);
+    if (scoreDiff) return scoreDiff;
+    const answeredDiff = getParticipantAnswered(b) - getParticipantAnswered(a);
+    if (answeredDiff) return answeredDiff;
+    return new Date(a.joinedAt) - new Date(b.joinedAt);
+  });
   leaderboard.innerHTML = `
-    <strong>Leaderboard</strong>
-    ${ranked.map((participant, index) => `
+    <strong>Participants (${visibleParticipants.length})</strong>
+    ${ranked.length ? ranked.map((participant, index) => `
       <div class="leaderboard-row ${participant.id === currentParticipantId ? "active" : ""}">
-        <span>${index + 1}. ${escapeHtml(participant.name)}</span>
+        <span>${index + 1}. ${escapeHtml(participant.name)}<small>${getParticipantAnswered(participant)} answered</small></span>
         <b>${getParticipantScore(participant)} / ${quizQuestions.length}</b>
-      </div>`).join("")}`;
+      </div>`).join("") : '<div class="leaderboard-row empty"><span>No named participants yet</span><b>0 / 10</b></div>'}`;
 }
 
 function addOrSwitchParticipant() {
@@ -1812,12 +1832,6 @@ async function init() {
     } else {
       await document.exitFullscreen();
     }
-  });
-
-  document.getElementById("resetQuiz").addEventListener("click", () => {
-    getCurrentParticipant().answers = {};
-    saveQuizState();
-    renderQuiz();
   });
 
   document.getElementById("addParticipant").addEventListener("click", addOrSwitchParticipant);

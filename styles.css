@@ -650,10 +650,6 @@ h2 {
   font-weight: 850;
 }
 
-.quiz-reset {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .participant-panel {
   display: grid;
   gap: 10px;
@@ -728,6 +724,19 @@ h2 {
 .leaderboard-row span {
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.leaderboard-row small {
+  display: block;
+  margin-top: 2px;
+  opacity: 0.74;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.leaderboard-row.empty {
+  opacity: 0.72;
 }
 
 .quiz-grid {
