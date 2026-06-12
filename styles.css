@@ -664,6 +664,13 @@ h2 {
   letter-spacing: 0.06em;
 }
 
+.participant-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.participant-panel input,
 .participant-panel select {
   width: 100%;
   min-height: 46px;
@@ -674,6 +681,10 @@ h2 {
   padding: 0 14px;
   font-size: 15px;
   font-weight: 850;
+}
+
+.participant-panel input::placeholder {
+  color: rgba(247, 251, 255, 0.48);
 }
 
 .quiz-leaderboard {
@@ -867,7 +878,8 @@ h2 {
 
   .highlight-list,
   .quiz-grid,
-  .quiz-options {
+  .quiz-options,
+  .participant-form {
     grid-template-columns: 1fr;
   }
 

@@ -1112,61 +1112,61 @@ let currentParticipantId = null;
 const quizQuestions = [
   {
     question: "Who has scored the most goals in men's FIFA World Cup history?",
-    options: ["Miroslav Klose", "Ronaldo Nazario", "Lionel Messi", "Gerd Muller"],
+    options: ["Ronaldo Nazario", "Miroslav Klose", "Lionel Messi", "Gerd Muller"],
     answer: "Miroslav Klose",
     note: "Klose scored 16 World Cup goals for Germany."
   },
   {
     question: "Which player scored a hat-trick in the 2022 men's World Cup final?",
-    options: ["Kylian Mbappe", "Lionel Messi", "Julian Alvarez", "Olivier Giroud"],
+    options: ["Lionel Messi", "Julian Alvarez", "Olivier Giroud", "Kylian Mbappe"],
     answer: "Kylian Mbappe",
     note: "Mbappe scored all three France goals in the final."
   },
   {
     question: "Which Argentina player lifted the 2022 men's World Cup as captain?",
-    options: ["Lionel Messi", "Angel Di Maria", "Emiliano Martinez", "Lautaro Martinez"],
+    options: ["Angel Di Maria", "Emiliano Martinez", "Lionel Messi", "Lautaro Martinez"],
     answer: "Lionel Messi",
     note: "Messi captained Argentina to the 2022 title."
   },
   {
     question: "Which player is Brazil's all-time leading men's World Cup goalscorer?",
-    options: ["Ronaldo Nazario", "Pele", "Neymar", "Romario"],
+    options: ["Pele", "Neymar", "Romario", "Ronaldo Nazario"],
     answer: "Ronaldo Nazario",
     note: "Ronaldo scored 15 World Cup goals for Brazil."
   },
   {
     question: "Who won the Golden Ball at the 2022 men's World Cup?",
-    options: ["Lionel Messi", "Kylian Mbappe", "Luka Modric", "Antoine Griezmann"],
+    options: ["Kylian Mbappe", "Lionel Messi", "Luka Modric", "Antoine Griezmann"],
     answer: "Lionel Messi",
     note: "Messi was named the tournament's best player."
   },
   {
     question: "Which France player won the Golden Boot at the 2022 men's World Cup?",
-    options: ["Kylian Mbappe", "Antoine Griezmann", "Olivier Giroud", "Aurelien Tchouameni"],
+    options: ["Antoine Griezmann", "Olivier Giroud", "Kylian Mbappe", "Aurelien Tchouameni"],
     answer: "Kylian Mbappe",
     note: "Mbappe finished as top scorer with eight goals."
   },
   {
     question: "Which goalkeeper won the Golden Glove at the 2022 men's World Cup?",
-    options: ["Emiliano Martinez", "Hugo Lloris", "Yassine Bounou", "Dominik Livakovic"],
+    options: ["Hugo Lloris", "Yassine Bounou", "Dominik Livakovic", "Emiliano Martinez"],
     answer: "Emiliano Martinez",
     note: "Martinez won the award after Argentina's title run."
   },
   {
     question: "Which player won the Golden Ball at the 2018 men's World Cup?",
-    options: ["Luka Modric", "Kylian Mbappe", "Antoine Griezmann", "Harry Kane"],
+    options: ["Kylian Mbappe", "Luka Modric", "Antoine Griezmann", "Harry Kane"],
     answer: "Luka Modric",
     note: "Modric led Croatia to the 2018 final."
   },
   {
     question: "Which England player won the Golden Boot at the 2018 men's World Cup?",
-    options: ["Harry Kane", "Raheem Sterling", "Marcus Rashford", "Bukayo Saka"],
+    options: ["Raheem Sterling", "Marcus Rashford", "Harry Kane", "Bukayo Saka"],
     answer: "Harry Kane",
     note: "Kane scored six goals in Russia 2018."
   },
   {
     question: "Which Spain player scored the winning goal in the 2010 men's World Cup final?",
-    options: ["Andres Iniesta", "Xavi", "David Villa", "Fernando Torres"],
+    options: ["Xavi", "David Villa", "Fernando Torres", "Andres Iniesta"],
     answer: "Andres Iniesta",
     note: "Iniesta scored in extra time against the Netherlands."
   }
@@ -1388,7 +1388,9 @@ function startRotation() {
   }
   if (!rotate) return;
   timer = setInterval(() => {
-    activeIndex = (activeIndex + 1) % slideIds.length;
+    do {
+      activeIndex = (activeIndex + 1) % slideIds.length;
+    } while (slideIds[activeIndex] === "quiz");
     showSlide(slideIds[activeIndex]);
   }, rotationMs);
 }
@@ -1674,6 +1676,24 @@ function renderParticipantControls() {
       </div>`).join("") : '<div class="leaderboard-row empty"><span>No named participants yet</span><b>0 / 10</b></div>'}`;
 }
 
+function addParticipantName() {
+  const input = document.getElementById("participantName");
+  const name = input?.value.trim();
+  if (!name) return;
+
+  const existing = quizParticipants.find((participant) => participant.name.toLowerCase() === name.toLowerCase());
+  if (existing) {
+    currentParticipantId = existing.id;
+  } else {
+    const participant = createParticipant(name);
+    quizParticipants.push(participant);
+    currentParticipantId = participant.id;
+  }
+  input.value = "";
+  saveQuizState();
+  renderQuiz();
+}
+
 function saveQuizState() {
   try {
     localStorage.setItem("worldCupQuizState", JSON.stringify({ quizParticipants, currentParticipantId }));
@@ -1833,6 +1853,15 @@ async function init() {
     currentParticipantId = event.target.value;
     saveQuizState();
     renderQuiz();
+  });
+
+  document.getElementById("addParticipantName").addEventListener("click", addParticipantName);
+
+  document.getElementById("participantName").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      addParticipantName();
+    }
   });
 
   document.addEventListener("keydown", (event) => {
