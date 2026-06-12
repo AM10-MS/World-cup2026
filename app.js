@@ -1106,8 +1106,6 @@ let liveScoreFeed = {
   message: "Live score feed has not loaded yet.",
   updatedAt: null,
 };
-let manualScores = {};
-let manualScoreEditorKey = null;
 let quizParticipants = [];
 let currentParticipantId = null;
 
@@ -1242,43 +1240,6 @@ function getScheduleMatchKey(match) {
   return fixtureKey(teams.home, teams.away);
 }
 
-function getManualScoreForFixture(fixture) {
-  if (!fixture) return null;
-  const teams = getFixtureTeams(fixture);
-  const key = fixtureKey(teams.home, teams.away);
-  return manualScores[key] ?? null;
-}
-
-function getManualScoreForMatch(match) {
-  const key = getScheduleMatchKey(match);
-  return key ? manualScores[key] ?? null : null;
-}
-
-function getManualFocusMatch() {
-  const liveManualKey = Object.entries(manualScores)
-    .find(([, match]) => isLiveApiStatus(match?.status))?.[0];
-  return liveManualKey
-    ? fullSchedule.find((match) => getScheduleMatchKey(match) === liveManualKey) ?? null
-    : null;
-}
-
-function saveManualScores() {
-  try {
-    localStorage.setItem("worldCupManualScores", JSON.stringify(manualScores));
-  } catch {
-    // The live board still updates for the current page view if storage is blocked.
-  }
-}
-
-function loadManualScores() {
-  try {
-    const saved = JSON.parse(localStorage.getItem("worldCupManualScores") ?? "{}");
-    manualScores = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
-  } catch {
-    manualScores = {};
-  }
-}
-
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1347,33 +1308,31 @@ function getApiFocusMatch() {
 function getRecentResultMatch(now = new Date()) {
   return fullSchedule
     .filter((match) => match.startsAt <= now)
-    .filter((match) => {
-      const scoreMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
-      return isFinalApiStatus(scoreMatch?.status);
-    })
+    .filter((match) => isFinalApiStatus(getApiMatchForFixture(match.fixture)?.status))
     .sort((a, b) => b.startsAt - a.startsAt)[0] ?? null;
 }
 
 function getScoreboardItems(now = new Date()) {
   const matchWindowMs = 2 * 60 * 60 * 1000;
-  const liveAndResults = fullSchedule
+  const liveMatches = fullSchedule
     .filter((match) => {
-      const scoreMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
+      const scoreMatch = getApiMatchForFixture(match.fixture);
       const inScheduleLiveWindow = now >= match.startsAt && now < new Date(match.startsAt.getTime() + matchWindowMs);
-      return inScheduleLiveWindow || isLiveApiStatus(scoreMatch?.status) || isFinalApiStatus(scoreMatch?.status);
+      return inScheduleLiveWindow || isLiveApiStatus(scoreMatch?.status);
     })
-    .sort((a, b) => b.startsAt - a.startsAt)
-    .slice(0, 4);
+    .sort(byStart);
+  const completedResults = fullSchedule
+    .filter((match) => isFinalApiStatus(getApiMatchForFixture(match.fixture)?.status))
+    .sort((a, b) => b.startsAt - a.startsAt);
   const upcoming = getUpcoming(fullSchedule, now).slice(0, 6);
   const seen = new Set();
-  return [...liveAndResults, ...upcoming]
+  return [...liveMatches, ...completedResults, ...upcoming]
     .filter((match) => {
       const key = getScheduleMatchKey(match) ?? match.fixture;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
-    })
-    .slice(0, 8);
+    });
 }
 
 function getScheduleMatchForApi(apiMatch) {
@@ -1453,72 +1412,6 @@ function formatUpdatedAt(isoDate) {
   });
 }
 
-function renderManualScoreControls(focus) {
-  const card = document.querySelector(".manual-score-card");
-  const matchLabel = document.getElementById("manualScoreMatch");
-  const homeInput = document.getElementById("manualHomeScore");
-  const awayInput = document.getElementById("manualAwayScore");
-  const statusInput = document.getElementById("manualStatus");
-  if (!card || !focus || !homeInput || !awayInput || !statusInput) return;
-
-  const key = getScheduleMatchKey(focus);
-  if (!key) return;
-
-  const teams = getFixtureTeams(focus.fixture);
-  const sameEditor = manualScoreEditorKey === key;
-  manualScoreEditorKey = key;
-
-  if (matchLabel) matchLabel.textContent = `${teams.home} v ${teams.away}`;
-  homeInput.placeholder = teams.home;
-  awayInput.placeholder = teams.away;
-
-  if (sameEditor && card.contains(document.activeElement)) return;
-
-  const manual = manualScores[key] ?? null;
-  homeInput.value = Number.isFinite(manual?.homeScore) ? manual.homeScore : "";
-  awayInput.value = Number.isFinite(manual?.awayScore) ? manual.awayScore : "";
-  statusInput.value = manual?.status ?? (getMatchState().live === focus ? "IN_PLAY" : "SCHEDULED");
-}
-
-function readScoreValue(input) {
-  const rawValue = input?.value?.trim();
-  if (!rawValue) return null;
-  const score = Number(rawValue);
-  return Number.isFinite(score) && score >= 0 ? Math.floor(score) : null;
-}
-
-function saveManualScore() {
-  if (!manualScoreEditorKey) return;
-  const focus = fullSchedule.find((match) => getScheduleMatchKey(match) === manualScoreEditorKey);
-  if (!focus) return;
-
-  const teams = getFixtureTeams(focus.fixture);
-  const homeScore = readScoreValue(document.getElementById("manualHomeScore"));
-  const awayScore = readScoreValue(document.getElementById("manualAwayScore"));
-  const status = document.getElementById("manualStatus")?.value ?? "IN_PLAY";
-
-  manualScores[manualScoreEditorKey] = {
-    manual: true,
-    status,
-    homeTeam: teams.home,
-    awayTeam: teams.away,
-    homeScore,
-    awayScore,
-    updatedAt: new Date().toISOString(),
-  };
-  saveManualScores();
-  renderLiveScoreboard();
-  renderScoreboardList();
-}
-
-function clearManualScore() {
-  if (!manualScoreEditorKey) return;
-  delete manualScores[manualScoreEditorKey];
-  saveManualScores();
-  renderLiveScoreboard();
-  renderScoreboardList();
-}
-
 function renderLiveScoreboard() {
   const container = document.getElementById("liveScoreboard");
   if (!container) return;
@@ -1528,29 +1421,23 @@ function renderLiveScoreboard() {
   const apiFocus = getApiFocusMatch();
   const apiFocusScheduleMatch = apiFocus ? getScheduleMatchForApi(apiFocus) : null;
   const recentResult = getRecentResultMatch(now);
-  const manualFocus = getManualFocusMatch();
-  const focus = manualFocus ?? apiFocusScheduleMatch ?? live ?? recentResult ?? next ?? last;
+  const focus = apiFocusScheduleMatch ?? live ?? recentResult ?? next ?? last;
   if (!focus) {
     container.innerHTML = "<small>Loading</small><strong>Schedule is loading...</strong>";
     return;
   }
 
   const apiMatch = getApiMatchForFixture(focus.fixture);
-  const manualMatch = getManualScoreForMatch(focus);
-  const displayMatch = manualMatch ?? apiMatch;
+  const displayMatch = apiMatch;
   const free = isFreeMatch(focus);
-  const status = manualMatch
-    ? `${matchStatusLabel(manualMatch.status)} (manual)`
-    : apiMatch
-      ? matchStatusLabel(apiMatch.status)
+  const status = apiMatch
+    ? matchStatusLabel(apiMatch.status)
     : live
       ? "Live window"
       : next
         ? "Next kickoff"
         : "Tournament complete";
-  const countdown = manualMatch
-    ? `Manual update ${formatUpdatedAt(manualMatch.updatedAt)}`
-    : apiMatch
+  const countdown = apiMatch
     ? liveScoreFeed.ok
       ? `Updated ${formatUpdatedAt(liveScoreFeed.updatedAt)}`
       : liveScoreFeed.message
@@ -1564,11 +1451,9 @@ function renderLiveScoreboard() {
   const awayTeam = displayMatch?.awayTeam ?? teams.away;
   const scoreClass = displayMatch && isLiveApiStatus(displayMatch.status) ? "live-score" : "";
   const score = displayMatch ? scoreText(displayMatch) : live ? "LIVE" : "--";
-  const scoreNote = manualMatch
-    ? "Manual score override is active on this display."
-    : liveScoreFeed.configured
-      ? `Scores powered by ${liveScoreFeed.provider ?? "the live-score feed"} when match data is available.`
-      : "Deploy on Vercel to enable automatic live scores, or use the manual score control.";
+  const scoreNote = liveScoreFeed.configured
+    ? `Scores powered by ${liveScoreFeed.provider ?? "the live-score feed"} when match data is available.`
+    : "Deploy on Vercel to enable automatic live scores.";
 
   container.innerHTML = `
     <div class="scoreboard-status">
@@ -1584,8 +1469,6 @@ function renderLiveScoreboard() {
     <p>${dateFormat.format(focus.startsAt)} at ${focus.singaporeTime} SGT | ${focus.stage} | ${focus.city}</p>
     ${free ? '<em>Free on Channel 5 + mewatch</em>' : ""}
     <small class="score-note">${scoreNote}</small>`;
-
-  renderManualScoreControls(focus);
 }
 
 function renderFreeHighlights() {
@@ -1618,9 +1501,9 @@ function renderScoreboardList() {
   const scoreboardItems = getScoreboardItems();
   list.innerHTML = scoreboardItems
     .map((match) => {
-      const displayMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
+      const displayMatch = getApiMatchForFixture(match.fixture);
       const scoreStatus = displayMatch
-        ? ` | ${matchStatusLabel(displayMatch.status)} ${scoreText(displayMatch)}${displayMatch.manual ? " (manual)" : ""}`
+        ? ` | ${matchStatusLabel(displayMatch.status)} ${scoreText(displayMatch)}`
         : "";
       return `
         <article class="scoreboard-row">
@@ -1878,7 +1761,6 @@ async function loadLiveScores() {
 async function init() {
   const data = await loadData();
   hydrateData(data.schedule, data.freeMatches);
-  loadManualScores();
   await loadLiveScores();
 
   renderClock();
@@ -1936,18 +1818,6 @@ async function init() {
     getCurrentParticipant().answers = {};
     saveQuizState();
     renderQuiz();
-  });
-
-  document.getElementById("saveManualScore").addEventListener("click", saveManualScore);
-  document.getElementById("clearManualScore").addEventListener("click", clearManualScore);
-
-  document.querySelectorAll("#manualHomeScore, #manualAwayScore").forEach((input) => {
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        saveManualScore();
-      }
-    });
   });
 
   document.getElementById("addParticipant").addEventListener("click", addOrSwitchParticipant);

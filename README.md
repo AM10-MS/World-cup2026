@@ -5,7 +5,7 @@ Static TV-board website for the FIFA World Cup 2026 Singapore-time schedule.
 Views:
 - Board: rotating overview with the next match and free-to-air highlights.
 - Free 28: Mediacorp / Channel 5 / mewatch free-to-air schedule.
-- Scoreboard: live Singapore-time clock, countdown, current/next match status, and upcoming fixtures.
+- Scoreboard: live Singapore-time clock, current score, all completed results returned by the live feed, and upcoming fixtures.
 - Quiz: participant name entry, saved per-person answers, leaderboard, and 10 World Cup trivia questions.
 - All 104: full Singapore-time poster.
 
@@ -13,11 +13,10 @@ Notes:
 - The main board is static HTML/CSS/JavaScript, with one Vercel Function for live scores.
 - It works from `file://`, localhost, GitHub, and Vercel.
 - The schedule data is embedded in `app.js` so the site still works even if Vercel cannot fetch the separate JSON files.
-- The scoreboard updates the clock, countdown, and match status in real time from the fixture schedule.
+- The scoreboard updates the clock, countdown, live scores, final results, and match status in real time from the fixture schedule and live feed.
 - Real match scores are supported on Vercel through `api/live-scores.js`.
 - The live-score function uses ESPN's FIFA World Cup scoreboard first, so no API key is required for the main live result feed.
 - If ESPN is unavailable, the function can optionally fall back to football-data.org when `FOOTBALL_DATA_API_KEY` is configured.
-- The Scoreboard tab also has a manual live-score control. It updates the TV board instantly and saves that override in the current browser.
 
 Run locally:
 
@@ -70,14 +69,6 @@ FOOTBALL_DATA_API_KEY=your_token_here
 Select `Production`, save, then redeploy the latest deployment from the Vercel `Deployments` tab.
 
 The frontend polls `/api/live-scores` every 20 seconds. The serverless function returns normalized match scores to the scoreboard, including live and final results.
-
-Manual live-score fallback:
-1. Open `/?slide=scoreboard&autorotate=0`.
-2. Type the home and away score in the `Manual live score` panel.
-3. Choose `Live`, `Half-time`, `Final`, or `Scheduled`.
-4. Press `Update score`.
-
-This manual score is saved in that browser only. It is perfect for your TV board, but other people opening the public link on their own phones will not see your manual override unless you add a shared database/admin panel later.
 
 Troubleshooting:
 - If Vercel shows `Unexpected token 'T', "The page c"... is not valid JSON`, it means an older version tried to fetch a JSON file but Vercel returned a "The page could not be found" response. Push the latest `app.js` and `index.html`; the current version embeds the schedule and does not rely on that fetch path.
