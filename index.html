@@ -102,10 +102,32 @@
         <div class="section-title live-title">
           <p class="eyebrow">Real-time board</p>
           <h2>Live match clock</h2>
-          <p>This board updates every second using the Singapore-time fixture schedule.</p>
+          <p>This board updates the clock every second and refreshes live scores every 20 seconds.</p>
         </div>
         <div class="scoreboard-layout">
-          <article id="liveScoreboard" class="scoreboard-card"></article>
+          <div class="scoreboard-main">
+            <article id="liveScoreboard" class="scoreboard-card"></article>
+            <article class="manual-score-card">
+              <strong>Manual live score</strong>
+              <span id="manualScoreMatch">Current match</span>
+              <p>Use this if the live-score feed has no data yet. It updates this page instantly.</p>
+              <div class="manual-score-inputs">
+                <input id="manualHomeScore" type="number" min="0" inputmode="numeric" placeholder="Home">
+                <b>-</b>
+                <input id="manualAwayScore" type="number" min="0" inputmode="numeric" placeholder="Away">
+              </div>
+              <select id="manualStatus">
+                <option value="SCHEDULED">Scheduled</option>
+                <option value="IN_PLAY">Live</option>
+                <option value="PAUSED">Half-time</option>
+                <option value="FINISHED">Final</option>
+              </select>
+              <div class="manual-score-actions">
+                <button id="saveManualScore" class="tool-button" type="button">Update score</button>
+                <button id="clearManualScore" class="tool-button" type="button">Clear</button>
+              </div>
+            </article>
+          </div>
           <div id="scoreboardList" class="scoreboard-list"></div>
         </div>
       </section>

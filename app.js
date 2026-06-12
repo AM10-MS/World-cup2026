@@ -1106,6 +1106,8 @@ let liveScoreFeed = {
   message: "Live score feed has not loaded yet.",
   updatedAt: null,
 };
+let manualScores = {};
+let manualScoreEditorKey = null;
 let quizParticipants = [];
 let currentParticipantId = null;
 
@@ -1234,6 +1236,49 @@ function fixtureKey(home, away) {
   return `${normalizeTeamName(home)}::${normalizeTeamName(away)}`;
 }
 
+function getScheduleMatchKey(match) {
+  if (!match?.fixture) return null;
+  const teams = getFixtureTeams(match.fixture);
+  return fixtureKey(teams.home, teams.away);
+}
+
+function getManualScoreForFixture(fixture) {
+  if (!fixture) return null;
+  const teams = getFixtureTeams(fixture);
+  const key = fixtureKey(teams.home, teams.away);
+  return manualScores[key] ?? null;
+}
+
+function getManualScoreForMatch(match) {
+  const key = getScheduleMatchKey(match);
+  return key ? manualScores[key] ?? null : null;
+}
+
+function getManualFocusMatch() {
+  const liveManualKey = Object.entries(manualScores)
+    .find(([, match]) => isLiveApiStatus(match?.status))?.[0];
+  return liveManualKey
+    ? fullSchedule.find((match) => getScheduleMatchKey(match) === liveManualKey) ?? null
+    : null;
+}
+
+function saveManualScores() {
+  try {
+    localStorage.setItem("worldCupManualScores", JSON.stringify(manualScores));
+  } catch {
+    // The live board still updates for the current page view if storage is blocked.
+  }
+}
+
+function loadManualScores() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("worldCupManualScores") ?? "{}");
+    manualScores = saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  } catch {
+    manualScores = {};
+  }
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1274,6 +1319,10 @@ function isLiveApiStatus(status) {
   return ["IN_PLAY", "LIVE", "PAUSED"].includes(status);
 }
 
+function isFinalApiStatus(status) {
+  return status === "FINISHED";
+}
+
 function scoreText(match) {
   if (Number.isFinite(match?.homeScore) && Number.isFinite(match?.awayScore)) {
     return `${match.homeScore} - ${match.awayScore}`;
@@ -1293,6 +1342,38 @@ function getApiMatchForFixture(fixture) {
 
 function getApiFocusMatch() {
   return liveScoreFeed.matches.find((match) => isLiveApiStatus(match.status)) ?? null;
+}
+
+function getRecentResultMatch(now = new Date()) {
+  return fullSchedule
+    .filter((match) => match.startsAt <= now)
+    .filter((match) => {
+      const scoreMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
+      return isFinalApiStatus(scoreMatch?.status);
+    })
+    .sort((a, b) => b.startsAt - a.startsAt)[0] ?? null;
+}
+
+function getScoreboardItems(now = new Date()) {
+  const matchWindowMs = 2 * 60 * 60 * 1000;
+  const liveAndResults = fullSchedule
+    .filter((match) => {
+      const scoreMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
+      const inScheduleLiveWindow = now >= match.startsAt && now < new Date(match.startsAt.getTime() + matchWindowMs);
+      return inScheduleLiveWindow || isLiveApiStatus(scoreMatch?.status) || isFinalApiStatus(scoreMatch?.status);
+    })
+    .sort((a, b) => b.startsAt - a.startsAt)
+    .slice(0, 4);
+  const upcoming = getUpcoming(fullSchedule, now).slice(0, 6);
+  const seen = new Set();
+  return [...liveAndResults, ...upcoming]
+    .filter((match) => {
+      const key = getScheduleMatchKey(match) ?? match.fixture;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
 }
 
 function getScheduleMatchForApi(apiMatch) {
@@ -1362,6 +1443,82 @@ function renderNextMatch() {
     : "<small>Schedule complete</small><strong>The tournament has wrapped.</strong>";
 }
 
+function formatUpdatedAt(isoDate) {
+  if (!isoDate) return "now";
+  return new Date(isoDate).toLocaleTimeString("en-SG", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    timeZone: "Asia/Singapore",
+  });
+}
+
+function renderManualScoreControls(focus) {
+  const card = document.querySelector(".manual-score-card");
+  const matchLabel = document.getElementById("manualScoreMatch");
+  const homeInput = document.getElementById("manualHomeScore");
+  const awayInput = document.getElementById("manualAwayScore");
+  const statusInput = document.getElementById("manualStatus");
+  if (!card || !focus || !homeInput || !awayInput || !statusInput) return;
+
+  const key = getScheduleMatchKey(focus);
+  if (!key) return;
+
+  const teams = getFixtureTeams(focus.fixture);
+  const sameEditor = manualScoreEditorKey === key;
+  manualScoreEditorKey = key;
+
+  if (matchLabel) matchLabel.textContent = `${teams.home} v ${teams.away}`;
+  homeInput.placeholder = teams.home;
+  awayInput.placeholder = teams.away;
+
+  if (sameEditor && card.contains(document.activeElement)) return;
+
+  const manual = manualScores[key] ?? null;
+  homeInput.value = Number.isFinite(manual?.homeScore) ? manual.homeScore : "";
+  awayInput.value = Number.isFinite(manual?.awayScore) ? manual.awayScore : "";
+  statusInput.value = manual?.status ?? (getMatchState().live === focus ? "IN_PLAY" : "SCHEDULED");
+}
+
+function readScoreValue(input) {
+  const rawValue = input?.value?.trim();
+  if (!rawValue) return null;
+  const score = Number(rawValue);
+  return Number.isFinite(score) && score >= 0 ? Math.floor(score) : null;
+}
+
+function saveManualScore() {
+  if (!manualScoreEditorKey) return;
+  const focus = fullSchedule.find((match) => getScheduleMatchKey(match) === manualScoreEditorKey);
+  if (!focus) return;
+
+  const teams = getFixtureTeams(focus.fixture);
+  const homeScore = readScoreValue(document.getElementById("manualHomeScore"));
+  const awayScore = readScoreValue(document.getElementById("manualAwayScore"));
+  const status = document.getElementById("manualStatus")?.value ?? "IN_PLAY";
+
+  manualScores[manualScoreEditorKey] = {
+    manual: true,
+    status,
+    homeTeam: teams.home,
+    awayTeam: teams.away,
+    homeScore,
+    awayScore,
+    updatedAt: new Date().toISOString(),
+  };
+  saveManualScores();
+  renderLiveScoreboard();
+  renderScoreboardList();
+}
+
+function clearManualScore() {
+  if (!manualScoreEditorKey) return;
+  delete manualScores[manualScoreEditorKey];
+  saveManualScores();
+  renderLiveScoreboard();
+  renderScoreboardList();
+}
+
 function renderLiveScoreboard() {
   const container = document.getElementById("liveScoreboard");
   if (!container) return;
@@ -1369,24 +1526,33 @@ function renderLiveScoreboard() {
   const now = new Date();
   const { live, next, last } = getMatchState(now);
   const apiFocus = getApiFocusMatch();
-  const focus = apiFocus ? (getScheduleMatchForApi(apiFocus) ?? live ?? next ?? last) : (live ?? next ?? last);
+  const apiFocusScheduleMatch = apiFocus ? getScheduleMatchForApi(apiFocus) : null;
+  const recentResult = getRecentResultMatch(now);
+  const manualFocus = getManualFocusMatch();
+  const focus = manualFocus ?? apiFocusScheduleMatch ?? live ?? recentResult ?? next ?? last;
   if (!focus) {
     container.innerHTML = "<small>Loading</small><strong>Schedule is loading...</strong>";
     return;
   }
 
-  const apiMatch = apiFocus ?? getApiMatchForFixture(focus.fixture);
+  const apiMatch = getApiMatchForFixture(focus.fixture);
+  const manualMatch = getManualScoreForMatch(focus);
+  const displayMatch = manualMatch ?? apiMatch;
   const free = isFreeMatch(focus);
-  const status = apiMatch
-    ? matchStatusLabel(apiMatch.status)
+  const status = manualMatch
+    ? `${matchStatusLabel(manualMatch.status)} (manual)`
+    : apiMatch
+      ? matchStatusLabel(apiMatch.status)
     : live
       ? "Live window"
       : next
         ? "Next kickoff"
         : "Tournament complete";
-  const countdown = apiMatch
+  const countdown = manualMatch
+    ? `Manual update ${formatUpdatedAt(manualMatch.updatedAt)}`
+    : apiMatch
     ? liveScoreFeed.ok
-      ? `Updated ${liveScoreFeed.updatedAt ? new Date(liveScoreFeed.updatedAt).toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "now"}`
+      ? `Updated ${formatUpdatedAt(liveScoreFeed.updatedAt)}`
       : liveScoreFeed.message
     : live
     ? `Started ${formatDuration(now - live.startsAt)} ago`
@@ -1394,8 +1560,15 @@ function renderLiveScoreboard() {
       ? `Kickoff in ${formatDuration(next.startsAt - now)}`
       : "Final whistle";
   const teams = getFixtureTeams(focus.fixture);
-  const homeTeam = apiMatch?.homeTeam ?? teams.home;
-  const awayTeam = apiMatch?.awayTeam ?? teams.away;
+  const homeTeam = displayMatch?.homeTeam ?? teams.home;
+  const awayTeam = displayMatch?.awayTeam ?? teams.away;
+  const scoreClass = displayMatch && isLiveApiStatus(displayMatch.status) ? "live-score" : "";
+  const score = displayMatch ? scoreText(displayMatch) : live ? "LIVE" : "--";
+  const scoreNote = manualMatch
+    ? "Manual score override is active on this display."
+    : liveScoreFeed.configured
+      ? `Scores powered by ${liveScoreFeed.provider ?? "the live-score feed"} when match data is available.`
+      : "Deploy on Vercel to enable automatic live scores, or use the manual score control.";
 
   container.innerHTML = `
     <div class="scoreboard-status">
@@ -1404,13 +1577,15 @@ function renderLiveScoreboard() {
     </div>
     <div class="scoreline">
       <span>${homeTeam}</span>
-      <b class="${apiMatch && isLiveApiStatus(apiMatch.status) ? "live-score" : ""}">${apiMatch ? scoreText(apiMatch) : live ? "LIVE" : "--"}</b>
+      <b class="${scoreClass}">${score}</b>
       <span>${awayTeam}</span>
     </div>
     <div class="countdown">${countdown}</div>
     <p>${dateFormat.format(focus.startsAt)} at ${focus.singaporeTime} SGT | ${focus.stage} | ${focus.city}</p>
     ${free ? '<em>Free on Channel 5 + mewatch</em>' : ""}
-    <small class="score-note">${liveScoreFeed.configured ? "Scores powered by football-data.org when match data is available." : "Add FOOTBALL_DATA_API_KEY in Vercel to enable real live scores."}</small>`;
+    <small class="score-note">${scoreNote}</small>`;
+
+  renderManualScoreControls(focus);
 }
 
 function renderFreeHighlights() {
@@ -1440,14 +1615,20 @@ function renderScoreboardList() {
   const list = document.getElementById("scoreboardList");
   if (!list) return;
 
-  const upcoming = getUpcoming(fullSchedule).slice(0, 6);
-  list.innerHTML = upcoming
-    .map((match) => `
-      <article class="scoreboard-row">
-        <span>${dateFormat.format(match.startsAt)} | ${match.singaporeTime} SGT</span>
-        <strong>${match.fixture}</strong>
-        <small>${match.stage} | ${match.city}${isFreeMatch(match) ? " | Free-to-air" : ""}${getApiMatchForFixture(match.fixture) ? ` | ${matchStatusLabel(getApiMatchForFixture(match.fixture).status)} ${scoreText(getApiMatchForFixture(match.fixture))}` : ""}</small>
-      </article>`)
+  const scoreboardItems = getScoreboardItems();
+  list.innerHTML = scoreboardItems
+    .map((match) => {
+      const displayMatch = getManualScoreForMatch(match) ?? getApiMatchForFixture(match.fixture);
+      const scoreStatus = displayMatch
+        ? ` | ${matchStatusLabel(displayMatch.status)} ${scoreText(displayMatch)}${displayMatch.manual ? " (manual)" : ""}`
+        : "";
+      return `
+        <article class="scoreboard-row">
+          <span>${dateFormat.format(match.startsAt)} | ${match.singaporeTime} SGT</span>
+          <strong>${match.fixture}</strong>
+          <small>${match.stage} | ${match.city}${isFreeMatch(match) ? " | Free-to-air" : ""}${scoreStatus}</small>
+        </article>`;
+    })
     .join("");
 }
 
@@ -1697,6 +1878,7 @@ async function loadLiveScores() {
 async function init() {
   const data = await loadData();
   hydrateData(data.schedule, data.freeMatches);
+  loadManualScores();
   await loadLiveScores();
 
   renderClock();
@@ -1726,7 +1908,7 @@ async function init() {
     await loadLiveScores();
     renderLiveScoreboard();
     renderScoreboardList();
-  }, 45_000);
+  }, 20_000);
 
   document.querySelectorAll("[data-slide-link]").forEach((button) => {
     button.addEventListener("click", (event) => {
@@ -1754,6 +1936,18 @@ async function init() {
     getCurrentParticipant().answers = {};
     saveQuizState();
     renderQuiz();
+  });
+
+  document.getElementById("saveManualScore").addEventListener("click", saveManualScore);
+  document.getElementById("clearManualScore").addEventListener("click", clearManualScore);
+
+  document.querySelectorAll("#manualHomeScore, #manualAwayScore").forEach((input) => {
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveManualScore();
+      }
+    });
   });
 
   document.getElementById("addParticipant").addEventListener("click", addOrSwitchParticipant);

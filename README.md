@@ -10,12 +10,14 @@ Views:
 - All 104: full Singapore-time poster.
 
 Notes:
-- The main board is static HTML/CSS/JavaScript, with one optional Vercel Function for live scores.
+- The main board is static HTML/CSS/JavaScript, with one Vercel Function for live scores.
 - It works from `file://`, localhost, GitHub, and Vercel.
 - The schedule data is embedded in `app.js` so the site still works even if Vercel cannot fetch the separate JSON files.
 - The scoreboard updates the clock, countdown, and match status in real time from the fixture schedule.
-- Real match scores are supported on Vercel through `api/live-scores.js` using football-data.org.
-- If the live-score API key is missing or the provider has no 2026 World Cup data yet, the board falls back to the schedule countdown.
+- Real match scores are supported on Vercel through `api/live-scores.js`.
+- The live-score function uses ESPN's FIFA World Cup scoreboard first, so no API key is required for the main live result feed.
+- If ESPN is unavailable, the function can optionally fall back to football-data.org when `FOOTBALL_DATA_API_KEY` is configured.
+- The Scoreboard tab also has a manual live-score control. It updates the TV board instantly and saves that override in the current browser.
 
 Run locally:
 
@@ -58,20 +60,24 @@ Vercel setup:
 7. Deploy.
 
 Live score setup:
-1. Create an API token at `football-data.org`.
-2. In Vercel, open this project.
-3. Go to `Settings` -> `Environment Variables`.
-4. Add:
+- Nothing extra is needed for the ESPN live-score feed. Deploy to Vercel and the Scoreboard tab will poll `/api/live-scores`.
+- Optional fallback: create an API token at `football-data.org`, then add this in Vercel under `Settings` -> `Environment Variables`:
 
 ```text
 FOOTBALL_DATA_API_KEY=your_token_here
 ```
 
-5. Select `Production`.
-6. Save.
-7. Redeploy the latest deployment from the Vercel `Deployments` tab.
+Select `Production`, save, then redeploy the latest deployment from the Vercel `Deployments` tab.
 
-The frontend polls `/api/live-scores` every 45 seconds. The serverless function keeps the token private and returns normalized match scores to the scoreboard.
+The frontend polls `/api/live-scores` every 20 seconds. The serverless function returns normalized match scores to the scoreboard, including live and final results.
+
+Manual live-score fallback:
+1. Open `/?slide=scoreboard&autorotate=0`.
+2. Type the home and away score in the `Manual live score` panel.
+3. Choose `Live`, `Half-time`, `Final`, or `Scheduled`.
+4. Press `Update score`.
+
+This manual score is saved in that browser only. It is perfect for your TV board, but other people opening the public link on their own phones will not see your manual override unless you add a shared database/admin panel later.
 
 Troubleshooting:
 - If Vercel shows `Unexpected token 'T', "The page c"... is not valid JSON`, it means an older version tried to fetch a JSON file but Vercel returned a "The page could not be found" response. Push the latest `app.js` and `index.html`; the current version embeds the schedule and does not rely on that fetch path.
