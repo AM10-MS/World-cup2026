@@ -1376,10 +1376,16 @@ function showSlide(id) {
   document.querySelectorAll("[data-slide-link]").forEach((button) => {
     button.classList.toggle("active", button.dataset.slideLink === slideIds[activeIndex]);
   });
+
+  if (slideIds[activeIndex] === "quiz") pauseRotation();
 }
 
 function startRotation() {
   clearInterval(timer);
+  if (slideIds[activeIndex] === "quiz") {
+    pauseRotation();
+    return;
+  }
   if (!rotate) return;
   timer = setInterval(() => {
     activeIndex = (activeIndex + 1) % slideIds.length;
@@ -1634,6 +1640,13 @@ function getVisibleParticipants() {
   return quizParticipants.filter((participant) => participant.name !== "Guest" || getParticipantAnswered(participant) > 0);
 }
 
+function pauseRotation() {
+  rotate = false;
+  clearInterval(timer);
+  const toggle = document.getElementById("rotateToggle");
+  if (toggle) toggle.textContent = "Resume";
+}
+
 function renderParticipantControls() {
   const select = document.getElementById("participantSelect");
   const leaderboard = document.getElementById("quizLeaderboard");
@@ -1659,24 +1672,6 @@ function renderParticipantControls() {
         <span>${index + 1}. ${escapeHtml(participant.name)}<small>${getParticipantAnswered(participant)} answered</small></span>
         <b>${getParticipantScore(participant)} / ${quizQuestions.length}</b>
       </div>`).join("") : '<div class="leaderboard-row empty"><span>No named participants yet</span><b>0 / 10</b></div>'}`;
-}
-
-function addOrSwitchParticipant() {
-  const input = document.getElementById("participantName");
-  const name = input.value.trim();
-  if (!name) return;
-
-  const existing = quizParticipants.find((participant) => participant.name.toLowerCase() === name.toLowerCase());
-  if (existing) {
-    currentParticipantId = existing.id;
-  } else {
-    const participant = createParticipant(name);
-    quizParticipants.push(participant);
-    currentParticipantId = participant.id;
-  }
-  input.value = "";
-  saveQuizState();
-  renderQuiz();
 }
 
 function saveQuizState() {
@@ -1831,15 +1826,6 @@ async function init() {
       await document.documentElement.requestFullscreen();
     } else {
       await document.exitFullscreen();
-    }
-  });
-
-  document.getElementById("addParticipant").addEventListener("click", addOrSwitchParticipant);
-
-  document.getElementById("participantName").addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      addOrSwitchParticipant();
     }
   });
 
