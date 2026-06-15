@@ -55,6 +55,40 @@ function normalizeEspnStatus(status) {
   return type.name ?? "SCHEDULED";
 }
 
+function getTeamNameById(competitors, teamId) {
+  const team = competitors.find((competitor) => String(competitor.team?.id) === String(teamId));
+  return team?.team?.displayName ?? team?.team?.name ?? null;
+}
+
+function getStatisticValue(competitor, name) {
+  return competitor.statistics?.find((statistic) => statistic.name === name)?.displayValue ?? null;
+}
+
+function goalMinuteValue(minute) {
+  const value = parseInt(minute, 10);
+  return Number.isFinite(value) ? value : 999;
+}
+
+function normalizeGoalEvents(competition, competitors) {
+  return (competition.details ?? [])
+    .filter((detail) => detail.scoringPlay || detail.type?.text?.toLowerCase().includes("goal"))
+    .map((detail) => {
+      const athletes = detail.athletesInvolved ?? [];
+      const scorer = athletes[0] ?? {};
+      const assist = athletes[1] ?? {};
+      return {
+        minute: detail.clock?.displayValue ?? null,
+        team: getTeamNameById(competitors, detail.team?.id) ?? detail.team?.displayName ?? null,
+        scorer: scorer.displayName ?? scorer.fullName ?? scorer.shortName ?? "Unknown scorer",
+        assist: assist.displayName ?? assist.fullName ?? assist.shortName ?? null,
+        type: detail.type?.text ?? "Goal",
+        ownGoal: Boolean(detail.ownGoal),
+        penaltyKick: Boolean(detail.penaltyKick),
+      };
+    })
+    .sort((a, b) => goalMinuteValue(a.minute) - goalMinuteValue(b.minute));
+}
+
 function normalizeEspnMatch(event) {
   const competition = event.competitions?.[0] ?? {};
   const competitors = competition.competitors ?? [];
@@ -75,6 +109,9 @@ function normalizeEspnMatch(event) {
     awayTeam: away.team?.displayName ?? away.team?.name ?? "TBD",
     homeScore: parseScore(home.score),
     awayScore: parseScore(away.score),
+    homeAssists: getStatisticValue(home, "goalAssists"),
+    awayAssists: getStatisticValue(away, "goalAssists"),
+    goalEvents: normalizeGoalEvents(competition, competitors),
     winner: home.winner ? home.team?.displayName : away.winner ? away.team?.displayName : null,
     provider: "ESPN",
     lastUpdated: competition.lastUpdated ?? null,
@@ -126,6 +163,9 @@ function normalizeFootballDataMatch(match) {
     awayTeam: match.awayTeam?.name ?? "TBD",
     homeScore: currentHome,
     awayScore: currentAway,
+    homeAssists: null,
+    awayAssists: null,
+    goalEvents: [],
     winner: score.winner ?? null,
     provider: "football-data.org",
     lastUpdated: match.lastUpdated ?? null,

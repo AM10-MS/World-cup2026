@@ -5,7 +5,7 @@ Static TV-board website for the FIFA World Cup 2026 Singapore-time schedule.
 Views:
 - Board: rotating overview with the next match and free-to-air highlights.
 - Free 28: Mediacorp / Channel 5 / mewatch free-to-air schedule.
-- Scoreboard: live Singapore-time clock, current score, all completed results returned by the live feed, and upcoming fixtures.
+- Scoreboard: live Singapore-time clock, current score, goal scorers, assist details when available, all completed results returned by the live feed, and upcoming fixtures.
 - Quiz: participant name entry, fixed participant list, saved per-person answers, leaderboard, and 10 World Cup trivia questions.
 - All 104: full Singapore-time poster.
 
@@ -14,6 +14,8 @@ Notes:
 - It works from `file://`, localhost, GitHub, and Vercel.
 - The schedule data is embedded in `app.js` so the site still works even if Vercel cannot fetch the separate JSON files.
 - The scoreboard updates the clock, countdown, live scores, final results, and match status in real time from the fixture schedule and live feed.
+- Goal scorers and assists are displayed when ESPN includes those details in the live feed.
+- Quiz participant names and answers stay in browser storage under `worldCupQuizState`; normal site updates should not clear them.
 - Real match scores are supported on Vercel through `api/live-scores.js`.
 - The live-score function uses ESPN's FIFA World Cup scoreboard first, so no API key is required for the main live result feed.
 - If ESPN is unavailable, the function can optionally fall back to football-data.org when `FOOTBALL_DATA_API_KEY` is configured.

@@ -1291,6 +1291,34 @@ function scoreText(match) {
   return isLiveApiStatus(match?.status) ? "LIVE" : "--";
 }
 
+function renderGoalEvents(match, limit = 6) {
+  const goals = match?.goalEvents ?? [];
+  if (!goals.length) return "";
+  return `
+    <div class="goal-events">
+      ${goals.slice(0, limit).map((goal) => {
+        const extras = [
+          goal.assist ? `Assist: ${escapeHtml(goal.assist)}` : "",
+          goal.penaltyKick ? "Penalty" : "",
+          goal.ownGoal ? "Own goal" : "",
+        ].filter(Boolean).join(" | ");
+        return `
+          <div class="goal-event">
+            <strong>${escapeHtml(goal.minute ?? "")} ${escapeHtml(goal.scorer)}</strong>
+            <small>${escapeHtml(goal.team ?? "Goal")}${extras ? ` | ${extras}` : ""}</small>
+          </div>`;
+      }).join("")}
+    </div>`;
+}
+
+function renderAssistSummary(match, homeTeam, awayTeam) {
+  const hasGoals = Boolean(match?.goalEvents?.length);
+  const hasAssists = Number(match?.homeAssists) > 0 || Number(match?.awayAssists) > 0;
+  if (!hasGoals && !hasAssists) return "";
+  if (!match?.homeAssists && !match?.awayAssists) return "";
+  return `<div class="assist-summary">Assists: ${escapeHtml(homeTeam)} ${match.homeAssists ?? 0} | ${escapeHtml(awayTeam)} ${match.awayAssists ?? 0}</div>`;
+}
+
 function getApiMatchForFixture(fixture) {
   const teams = getFixtureTeams(fixture);
   const key = fixtureKey(teams.home, teams.away);
@@ -1475,6 +1503,8 @@ function renderLiveScoreboard() {
     </div>
     <div class="countdown">${countdown}</div>
     <p>${dateFormat.format(focus.startsAt)} at ${focus.singaporeTime} SGT | ${focus.stage} | ${focus.city}</p>
+    ${renderGoalEvents(displayMatch, 8)}
+    ${renderAssistSummary(displayMatch, homeTeam, awayTeam)}
     ${free ? '<em>Free on Channel 5 + mewatch</em>' : ""}
     <small class="score-note">${scoreNote}</small>`;
 }
@@ -1518,6 +1548,7 @@ function renderScoreboardList() {
           <span>${dateFormat.format(match.startsAt)} | ${match.singaporeTime} SGT</span>
           <strong>${match.fixture}</strong>
           <small>${match.stage} | ${match.city}${isFreeMatch(match) ? " | Free-to-air" : ""}${scoreStatus}</small>
+          ${renderGoalEvents(displayMatch, 5)}
         </article>`;
     })
     .join("");
