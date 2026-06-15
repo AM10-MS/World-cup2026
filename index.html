@@ -21,6 +21,7 @@
         <button class="nav-button active" data-slide-link="board">Board</button>
         <button class="nav-button" data-slide-link="free">Free 28</button>
         <button class="nav-button" data-slide-link="scoreboard">Scoreboard</button>
+        <button class="nav-button" data-slide-link="stats">Stats</button>
         <button class="nav-button" data-slide-link="quiz">Quiz</button>
         <button class="nav-button" data-slide-link="poster">All 104</button>
       </nav>
@@ -107,6 +108,37 @@
         <div class="scoreboard-layout">
           <article id="liveScoreboard" class="scoreboard-card"></article>
           <div id="scoreboardList" class="scoreboard-list"></div>
+        </div>
+      </section>
+
+      <section class="slide stats-slide" id="stats" data-slide="stats">
+        <div class="section-title live-title">
+          <p class="eyebrow">Tournament stats</p>
+          <h2>Scorers, assists, results</h2>
+          <p>Player leaders and completed results update from the live score feed.</p>
+        </div>
+        <div class="stats-layout">
+          <article class="stats-card">
+            <div class="stats-heading">
+              <span>Golden boot watch</span>
+              <strong>Top scorers</strong>
+            </div>
+            <div id="topScorers" class="stats-list"></div>
+          </article>
+          <article class="stats-card">
+            <div class="stats-heading">
+              <span>Creative leaders</span>
+              <strong>Top assists</strong>
+            </div>
+            <div id="topAssists" class="stats-list"></div>
+          </article>
+          <article class="stats-card past-results-card">
+            <div class="stats-heading">
+              <span>Completed matches</span>
+              <strong>Past results</strong>
+            </div>
+            <div id="pastResults" class="past-results-list"></div>
+          </article>
         </div>
       </section>
 

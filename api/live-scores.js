@@ -15,7 +15,28 @@ function parseScore(value) {
 
 function dateKey(offsetDays) {
   const date = new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000);
+  return formatDateKey(date);
+}
+
+function formatDateKey(date) {
   return date.toISOString().slice(0, 10).replaceAll("-", "");
+}
+
+function espnDateKeysToFetch() {
+  const tournamentStart = Date.UTC(2026, 5, 11);
+  const tournamentEnd = Date.UTC(2026, 6, 20);
+  const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+
+  if (tomorrow < tournamentStart) {
+    return [dateKey(-1), dateKey(0), dateKey(1)];
+  }
+
+  const end = Math.min(tomorrow, tournamentEnd);
+  const keys = [];
+  for (let day = tournamentStart; day <= end; day += 24 * 60 * 60 * 1000) {
+    keys.push(formatDateKey(new Date(day)));
+  }
+  return keys;
 }
 
 function uniqueById(matches) {
@@ -81,6 +102,7 @@ function normalizeGoalEvents(competition, competitors) {
         team: getTeamNameById(competitors, detail.team?.id) ?? detail.team?.displayName ?? null,
         scorer: scorer.displayName ?? scorer.fullName ?? scorer.shortName ?? "Unknown scorer",
         assist: assist.displayName ?? assist.fullName ?? assist.shortName ?? null,
+        assistTeam: assist.team?.id ? getTeamNameById(competitors, assist.team.id) : null,
         type: detail.type?.text ?? "Goal",
         ownGoal: Boolean(detail.ownGoal),
         penaltyKick: Boolean(detail.penaltyKick),
@@ -121,9 +143,7 @@ function normalizeEspnMatch(event) {
 async function fetchEspnMatches() {
   const urls = [
     ESPN_BASE,
-    `${ESPN_BASE}?dates=${dateKey(-1)}`,
-    `${ESPN_BASE}?dates=${dateKey(0)}`,
-    `${ESPN_BASE}?dates=${dateKey(1)}`,
+    ...espnDateKeysToFetch().map((date) => `${ESPN_BASE}?dates=${date}`),
   ];
 
   const payloads = await Promise.allSettled(urls.map((url) => fetchJson(url)));

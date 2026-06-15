@@ -1089,7 +1089,7 @@ const EMBEDDED_TV_DATA = {
   ]
 };
 
-const slideIds = ["board", "free", "scoreboard", "quiz", "poster"];
+const slideIds = ["board", "free", "scoreboard", "stats", "quiz", "poster"];
 const rotationMs = 24000;
 let activeIndex = 0;
 let rotate = true;
@@ -1570,6 +1570,75 @@ function renderFreeTable() {
     .join("");
 }
 
+function addPlayerStat(map, name, team) {
+  if (!name) return;
+  const key = `${normalizeTeamName(name)}::${normalizeTeamName(team ?? "")}`;
+  const current = map.get(key) ?? { name, team, count: 0 };
+  current.count += 1;
+  map.set(key, current);
+}
+
+function getPlayerLeaders(type) {
+  const stats = new Map();
+  liveScoreFeed.matches.forEach((match) => {
+    (match.goalEvents ?? []).forEach((goal) => {
+      if (type === "goals" && !goal.ownGoal) {
+        addPlayerStat(stats, goal.scorer, goal.team);
+      }
+      if (type === "assists" && goal.assist) {
+        addPlayerStat(stats, goal.assist, goal.assistTeam ?? goal.team);
+      }
+    });
+  });
+  return [...stats.values()]
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    .slice(0, 12);
+}
+
+function renderLeaderRows(containerId, leaders, label) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  container.innerHTML = leaders.length
+    ? leaders.map((player, index) => `
+      <div class="stat-row">
+        <span>${index + 1}</span>
+        <strong>${escapeHtml(player.name)}<small>${escapeHtml(player.team ?? "Team unavailable")}</small></strong>
+        <b>${player.count} ${player.count === 1 ? label : `${label}s`}</b>
+      </div>`).join("")
+    : `<div class="empty-state">No ${label} data yet. This fills in once completed/live match details are available.</div>`;
+}
+
+function formatSgtDateTime(dateValue) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "SGT";
+  return `${dateFormat.format(date)} | ${clockFormat.format(date).slice(0, 5)} SGT`;
+}
+
+function getPastResults() {
+  return liveScoreFeed.matches
+    .filter((match) => isFinalApiStatus(match.status) && Number.isFinite(match.homeScore) && Number.isFinite(match.awayScore))
+    .sort((a, b) => new Date(b.utcDate) - new Date(a.utcDate));
+}
+
+function renderPastResults(results) {
+  const container = document.getElementById("pastResults");
+  if (!container) return;
+  container.innerHTML = results.length
+    ? results.map((match) => `
+      <article class="past-result">
+        <span>${formatSgtDateTime(match.utcDate)} | ${matchStatusLabel(match.status)}</span>
+        <strong>${escapeHtml(match.homeTeam)} ${match.homeScore} - ${match.awayScore} ${escapeHtml(match.awayTeam)}</strong>
+        ${renderGoalEvents(match, 8)}
+      </article>`).join("")
+    : '<div class="empty-state">No completed results yet.</div>';
+}
+
+function renderStatsBoard() {
+  renderLeaderRows("topScorers", getPlayerLeaders("goals"), "goal");
+  renderLeaderRows("topAssists", getPlayerLeaders("assists"), "assist");
+  renderPastResults(getPastResults());
+}
+
 function renderQuiz() {
   const grid = document.getElementById("quizGrid");
   if (!grid) return;
@@ -1835,6 +1904,7 @@ async function init() {
   renderFreeHighlights();
   renderUpcomingMini();
   renderScoreboardList();
+  renderStatsBoard();
   renderFreeTable();
   loadQuizState();
   renderQuiz();
@@ -1849,6 +1919,7 @@ async function init() {
     renderFreeHighlights();
     renderUpcomingMini();
     renderScoreboardList();
+    renderStatsBoard();
     renderFreeTable();
   }, 60_000);
 
@@ -1856,6 +1927,7 @@ async function init() {
     await loadLiveScores();
     renderLiveScoreboard();
     renderScoreboardList();
+    renderStatsBoard();
   }, 20_000);
 
   document.querySelectorAll("[data-slide-link]").forEach((button) => {

@@ -6,6 +6,7 @@ Views:
 - Board: rotating overview with the next match and free-to-air highlights.
 - Free 28: Mediacorp / Channel 5 / mewatch free-to-air schedule.
 - Scoreboard: live Singapore-time clock, current score, goal scorers, assist details when available, all completed results returned by the live feed, and upcoming fixtures.
+- Stats: tournament-to-date top scorers, top assists, and past results from the live feed.
 - Quiz: participant name entry, fixed participant list, saved per-person answers, leaderboard, and 10 World Cup trivia questions.
 - All 104: full Singapore-time poster.
 
@@ -39,6 +40,7 @@ Useful TV URLs:
 /?slide=board
 /?slide=free
 /?slide=scoreboard
+/?slide=stats
 /?slide=quiz
 /?slide=poster
 /?slide=free&autorotate=0
